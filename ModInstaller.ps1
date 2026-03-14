@@ -1,146 +1,152 @@
-```powershell
 #Requires -Version 5
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new()
 
-$Lang = "VI"
+$Lang="VI"
 
-# ---------------- HEADER ----------------
+$ForgeURL="https://download.mcbbs.net/forge/minecraftforge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar"
+$SKURL="https://download.skmedix.pl/sklauncher/SKlauncher-3.2.18_Setup.exe"
+$ModsURL="https://download2261.mediafire.com/epxn3ivqfml8w4e/Client_Side_Mods.zip"
 
-function ShowHeader {
-    Clear-Host
-    Write-Host "====================================="
-    Write-Host "  Minecraft Modpack Installer"
-    Write-Host "====================================="
-    Write-Host ""
+function Header{
+Clear-Host
+Write-Host "====================================="
+Write-Host " Minecraft Modpack Installer"
+Write-Host "====================================="
 }
 
-# ---------------- EXECUTION POLICY ----------------
+function CheckExecutionPolicy{
 
-function CheckExecutionPolicy {
+$policy=Get-ExecutionPolicy
 
-    $policy = Get-ExecutionPolicy
+if($policy -eq "Restricted"){
 
-    if ($policy -eq "Restricted") {
-
-        if ($Lang -eq "VI") {
-            $msg = "Phát hiện ExecutionPolicy đã tắt, bạn có muốn bật không? (Y/N)"
-        } else {
-            $msg = "ExecutionPolicy disabled. Enable it? (Y/N)"
-        }
-
-        $ans = Read-Host $msg
-
-        if ($ans -match "Y|y") {
-            Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-        } else {
-            exit
-        }
-    }
+if($Lang -eq "VI"){
+$ans=Read-Host "Phát hiện ExecutionPolicy bị tắt. Bật lên? (Y/N)"
+}else{
+$ans=Read-Host "ExecutionPolicy disabled. Enable it? (Y/N)"
 }
 
-# ---------------- DOWNLOAD FUNCTION ----------------
-
-function DownloadFile($url,$path){
-
-    $start = Get-Date
-
-    Invoke-WebRequest $url -OutFile $path -UseBasicParsing
-
-    $end = Get-Date
-    $size = (Get-Item $path).Length
-
-    $time = ($end-$start).TotalSeconds
-
-    if($time -gt 0){
-        $speed = [math]::Round(($size/1MB)/$time,2)
-        Write-Host "Speed: $speed MB/s"
-    }
+if($ans -match "Y|y"){
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+}else{
+exit
+}
 
 }
 
-# ---------------- JAVA CHECK ----------------
+}
 
-function CheckJava {
+function CheckCurl{
 
-    $java = Get-Command java -ErrorAction SilentlyContinue
+$curl=Get-Command curl -ErrorAction SilentlyContinue
 
-    if(!$java){
+if(!$curl){
 
-        if($Lang -eq "VI"){
-            $ask = Read-Host "Máy bạn chưa cài Java. Bạn có muốn cài Java 17? (Y/N)"
-        }
-        else{
-            $ask = Read-Host "Java not found. Install Java 17? (Y/N)"
-        }
+Write-Host "Installing curl..."
 
-        if($ask -match "Y|y"){
-
-            $url="https://download.oracle.com/java/17/latest/jdk-17_windows-x64_bin.exe"
-            $out="$env:TEMP\java17.exe"
-
-            Write-Host "Downloading Java..."
-            DownloadFile $url $out
-
-            Start-Process $out -Wait
-        }
-    }
+winget install curl -e
 
 }
 
-# ---------------- RAM CHECK ----------------
+}
 
-function CheckRAM {
+function Download($url,$path){
 
-$ram = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory /1GB
+$retry=0
 
+while($retry -lt 5){
+
+try{
+
+$start=Get-Date
+
+Invoke-WebRequest $url -OutFile $path -UseBasicParsing
+
+$size=(Get-Item $path).Length
+$time=((Get-Date)-$start).TotalSeconds
+
+$speed=[math]::Round(($size/1MB)/$time,2)
+
+Write-Host "Speed $speed MB/s"
+
+return
+
+}catch{
+
+$retry++
+
+Write-Host "Retry $retry..."
+
+}
+
+}
+
+Write-Host "Download failed"
+exit
+
+}
+
+function CheckJava{
+
+$java=Get-Command java -ErrorAction SilentlyContinue
+
+if(!$java){
+
+if($Lang -eq "VI"){
+$ans=Read-Host "Máy bạn chưa cài Java 17. Cài đặt? (Y/N)"
+}else{
+$ans=Read-Host "Java 17 not detected. Install? (Y/N)"
+}
+
+if($ans -match "Y|y"){
+
+$url="https://download.oracle.com/java/17/latest/jdk-17_windows-x64_bin.exe"
+$out="$env:TEMP\java17.exe"
+
+Download $url $out
+
+Start-Process $out -Wait
+
+}
+
+}
+
+}
+
+function CheckRAM{
+
+$ram=(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB
 $ram=[math]::Round($ram)
 
 if($ram -lt 4){
 
-    if($Lang -eq "VI"){
-        Write-Host "Ram yêu cầu tối thiểu là 4Gb"
-    }
-    else{
-        Write-Host "Minimum RAM required: 4GB"
-    }
+Write-Host "Minimum RAM 4GB"
 
+}elseif($ram -lt 10){
+
+if($Lang -eq "VI"){
+Read-Host "Ram <10GB, bạn muốn tự chỉnh config? (Enter)"
+}else{
+Read-Host "RAM <10GB configure manually (Enter)"
 }
 
-elseif($ram -lt 10){
+}else{
 
-    if($Lang -eq "VI"){
-        $ans=Read-Host "Ram thấp hơn 10GB. Bạn có muốn set riêng không? (Y/N)"
-    }
-    else{
-        $ans=Read-Host "RAM below 10GB. Configure manually? (Y/N)"
-    }
-
-}
-
-else{
-
-    if($Lang -eq "VI"){
-        Write-Host "Đã phát hiện RAM >=10GB, dùng config mặc định."
-    }
-    else{
-        Write-Host "Detected RAM >=10GB using default config."
-    }
+Write-Host "Using default config"
 
 }
 
 }
 
-# ---------------- INSTALL FORGE ----------------
+function InstallForge{
 
-function InstallForge {
+Header
 
 $forge="$env:TEMP\forge.jar"
 
-$url="https://www.mediafire.com/file/w7ke9amo1b3dchg/forge-1.20.1-47.4.10-installer.jar/file"
-
 Write-Host "Downloading Forge..."
 
-DownloadFile $url $forge
+Download $ForgeURL $forge
 
 Write-Host "Installing Forge..."
 
@@ -148,78 +154,62 @@ java -jar $forge --installClient
 
 }
 
-# ---------------- INSTALL SKLAUNCHER ----------------
+function InstallSKLauncher{
 
-function InstallLauncher {
-
-ShowHeader
-
-$url="https://www.mediafire.com/file/3ji48egshetqr37/SKlauncher-3.2.18_Setup.exe/file"
+Header
 
 $out="$env:TEMP\sklauncher.exe"
 
 Write-Host "Downloading SKLauncher..."
 
-DownloadFile $url $out
+Download $SKURL $out
 
 Start-Process $out
 
 }
 
-# ---------------- DOWNLOAD MODS ----------------
+function DownloadMods{
 
-function DownloadModsOnly {
-
-ShowHeader
-
-$url="https://www.mediafire.com/file/epxn3ivqfml8w4e/Client_Side_Mods.zip/file"
+Header
 
 $out="$env:TEMP\mods.zip"
 
 Write-Host "Downloading Mods..."
 
-DownloadFile $url $out
+Download $ModsURL $out
 
 }
 
-# ---------------- INSTALL ALL ----------------
+function InstallAll{
 
-function InstallAll {
-
-ShowHeader
+Header
 
 CheckJava
 CheckRAM
 InstallForge
-DownloadModsOnly
+DownloadMods
 
 if($Lang -eq "VI"){
-Write-Host "Bạn đang dùng cấu hình cho máy yếu. Nếu thấy đồ họa xấu hãy tự chỉnh."
-}
-else{
-Write-Host "Low-end config applied. Adjust graphics if needed."
-}
-
+Write-Host "Bạn đang dùng config máy yếu. Nếu đồ họa xấu hãy chỉnh lại."
+}else{
+Write-Host "Low end config applied."
 }
 
-# ---------------- LANGUAGE ----------------
+}
 
-function SwitchLanguage {
+function SwitchLang{
 
 if($Lang -eq "VI"){
 $script:Lang="EN"
-}
-else{
+}else{
 $script:Lang="VI"
 }
 
 }
 
-# ---------------- MENU ----------------
+function Menu{
 
-function ShowMenu {
-
-ShowHeader
+Header
 
 if($Lang -eq "VI"){
 
@@ -229,9 +219,7 @@ Write-Host "3. Chỉ Tải Mods"
 Write-Host "4. Switch to English interface"
 Write-Host "5. Thoát"
 
-}
-
-else{
+}else{
 
 Write-Host "1. Install SKLauncher"
 Write-Host "2. Download And Install All Mods And Options"
@@ -243,33 +231,31 @@ Write-Host "5. Exit"
 
 }
 
-# ---------------- MAIN LOOP ----------------
-
 CheckExecutionPolicy
+CheckCurl
 
 while($true){
 
-ShowMenu
+Menu
 
-$choice=Read-Host "Select option"
+$choice=Read-Host "Select"
 
 switch($choice){
 
-"1"{InstallLauncher}
+"1"{InstallSKLauncher}
 
 "2"{InstallAll}
 
-"3"{DownloadModsOnly}
+"3"{DownloadMods}
 
-"4"{SwitchLanguage}
+"4"{SwitchLang}
 
 "5"{exit}
 
-default{Write-Host "Invalid option"}
+default{Write-Host "Invalid"}
 
 }
 
 pause
 
 }
-```
